@@ -1,0 +1,17 @@
+[package]
+name = "crability"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anstream = "1.0.0"
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+dirs = "6.0.0"
+indicatif = { version = "0.18.6", features = ["rayon"] }
+nix = { version = "0.31.3", features = ["user"] }
+owo-colors = "4.3.0"
+rs-release = "0.1.11"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+shellexpand = "3.1.2"
