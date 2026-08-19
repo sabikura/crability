@@ -42,9 +42,9 @@ pub(crate) fn run() -> Result<()> {
     }
 
     // Build via cheribuild
-    Command::new("./cheribuild.py")
+    Command::new("python3")
         .current_dir(config.cheribuild_dir())
-        .args(["--skip-update", "morello-llvm"])
+        .args(["cheribuild.py", "--skip-update", "morello-llvm"])
         .status()?;
 
     let llvm_config = paths.morello_sdk_bin().join("llvm-config");
