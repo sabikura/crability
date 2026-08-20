@@ -3,7 +3,7 @@ use crate::{
     config::{self, Config},
 };
 use anyhow::{bail, Context, Result};
-use std::{fs, process::Command};
+use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
 
 pub(crate) fn run() -> Result<()> {
     let config = Config::read_from_file(&config::path()?)?;
@@ -29,54 +29,56 @@ pub(crate) fn run() -> Result<()> {
         .with_context(|| format!("writing {}", cheri_config.display()))?;
 
     Command::new("python3")
-        .current_dir(rust_dir)
+        .current_dir(&rust_dir)
         .args(["x.py", "build"])
         .status()?;
+
+    // Install the binaries in ~/.crability/bin
+    install_binaries(&config, &rust_dir)?;
 
     Ok(())
 }
 
-/// Create symlinks to the rust binaries in the .crability/bin path
-// TODO
-// pub fn install_binaries(cfg: &Config, rust_dir: &Path) -> Result<()> {
-//     let stage1_bin = find_stage1_bin(rust_dir)?;
-//     let bin_dir = cfg.bin_dir();
-//     fs::create_dir_all(&bin_dir).with_context(|| format!("creating {}", bin_dir.display()))?;
-//
-//     let mut linked = 0;
-//     for entry in
-//         fs::read_dir(&stage1_bin).with_context(|| format!("reading {}", stage1_bin.display()))?
-//     {
-//         let src = entry?.path();
-//         if src.is_dir() {
-//             continue;
-//         }
-//         let name = match src.file_name() {
-//             Some(name) => name.to_owned(),
-//             None => continue,
-//         };
-//         let dst = bin_dir.join(&name);
-//         // symlink_metadata, not exists(): a link left dangling by a wiped build
-//         // tree must be replaced too, and `exists()` follows the link.
-//         if fs::symlink_metadata(&dst).is_ok() {
-//             fs::remove_file(&dst).with_context(|| format!("replacing {}", dst.display()))?;
-//         }
-//         symlink(&src, &dst)
-//             .with_context(|| format!("linking {} -> {}", dst.display(), src.display()))?;
-//         linked += 1;
-//     }
-//
-//     println!(
-//         "• linked {linked} binaries from {} into {}",
-//         stage1_bin.display(),
-//         bin_dir.display()
-//     );
-//     println!(
-//         "  add them to your PATH with:  export PATH=\"{}:$PATH\"",
-//         bin_dir.display()
-//     );
-//     Ok(())
-// }
+pub fn install_binaries(config: &Config, rust_dir: &Path) -> Result<()> {
+    // FIXME: This is the only host target supported for now :(
+    const HOST_TARGET: &str = "x86_64-unknown-linux-gnu";
+
+    let stage1_bin_dir = rust_dir
+        .join("build")
+        .join(HOST_TARGET)
+        .join("stage1")
+        .join("bin");
+
+    let bin_dir = config.bin_dir();
+    fs::create_dir_all(&bin_dir).with_context(|| format!("creating {}", bin_dir.display()))?;
+
+    let stage1_bins = fs::read_dir(&stage1_bin_dir)
+        .with_context(|| format!("reading {}", stage1_bin_dir.display()))?;
+
+    for bin in stage1_bins.filter_map(Result::ok) {
+        let path = bin.path();
+        if path.is_dir() {
+            continue;
+        }
+
+        let Some(name) = path.file_name() else {
+            continue;
+        };
+
+        let dest = bin_dir.join(name);
+
+        // This doesnt follow the symlink. Just check the file is fine before trying to delete it
+        // TODO: Log files with issues
+        if fs::symlink_metadata(&dest).is_ok() {
+            fs::remove_file(&dest).with_context(|| format!("replacing {}", dest.display()))?;
+        }
+
+        symlink(&path, &dest)
+            .with_context(|| format!("linking {} -> {}", dest.display(), path.display()))?;
+    }
+
+    Ok(())
+}
 
 /// Overwrite cheri-config.sh with the script pointed at CHERI_HOME
 fn generate_cheri_config(cheri_home: &str) -> String {
