@@ -1,8 +1,12 @@
-use crate::config::{self, Config, RepoConfig};
-use anyhow::{Context, Result};
+use crate::{
+    config::{self, Config, RepoConfig},
+    context::Context,
+};
+use anyhow::{Context as _, Result};
+use owo_colors::OwoColorize;
 use std::{fs, path::Path, process::Command};
 
-pub(crate) fn run() -> Result<()> {
+pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let config = Config::read_from_file(&config::path()?)
         .context("Could not read from config file. Please run `crability init`")?;
 
@@ -19,15 +23,18 @@ pub(crate) fn run() -> Result<()> {
     ];
 
     for (local, config) in targets {
-        clone_or_update(&local, &config)?;
+        clone_or_update(&local, &config, ctx)?;
     }
 
-    println!("fetch: done, repos live under {}", repos_dir.display());
+    eprintln!(
+        "Fetched repositories can be found under {}",
+        repos_dir.display().underline()
+    );
 
     Ok(())
 }
 
-fn clone_or_update(local: &Path, config: &RepoConfig) -> Result<()> {
+fn clone_or_update(local: &Path, config: &RepoConfig, ctx: &mut Context) -> Result<()> {
     if local.join(".git").exists() {
         // Check if commit exists, if not, fetch the origin
         let commit = &config.commit;
@@ -39,24 +46,28 @@ fn clone_or_update(local: &Path, config: &RepoConfig) -> Result<()> {
             .status
             .success();
         if !commit_exists {
-            Command::new("git")
-                .args(["fetch", "origin"])
-                .current_dir(local)
-                .status()?;
+            ctx.run(
+                Command::new("git")
+                    .args(["fetch", "origin"])
+                    .current_dir(local),
+            )?;
         }
     } else {
         if let Some(parent) = local.parent() {
             fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
         }
         let local_str = local.to_str().context("non-UTF-8 path")?;
-        Command::new("git")
-            .args(["clone", &config.remote, local_str])
-            .status()?;
+        let mut command = Command::new("git");
+        command.args(["clone", &config.remote, local_str]);
+
+        ctx.run(&mut command)?;
     }
-    Command::new("git")
-        .args(["checkout", "--detach", &config.commit])
-        .current_dir(local)
-        .status()?;
+
+    ctx.run(
+        Command::new("git")
+            .args(["checkout", "--detach", &config.commit])
+            .current_dir(local),
+    )?;
 
     Ok(())
 }

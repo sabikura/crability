@@ -1,11 +1,14 @@
 use crate::{
     cheribuild_config::CheribuildPaths,
     config::{self, Config, RepoConfig},
+    context::Context,
+    status,
 };
-use anyhow::{bail, Context, Ok, Result};
+use anyhow::{bail, Context as _, Result};
+use owo_colors::OwoColorize;
 use std::{fs, path::Path, process::Command};
 
-pub(crate) fn run() -> Result<()> {
+pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let paths = CheribuildPaths::read()?;
     let config = Config::read_from_file(&config::path()?)
         .context("Could not read from config file. Please run `crability init`")?;
@@ -13,16 +16,20 @@ pub(crate) fn run() -> Result<()> {
     fs::create_dir_all(&paths.source_root)
         .with_context(|| format!("creating {}", paths.source_root.display()))?;
 
-    let llvm_dir = paths.morello_llvm_dir();
-    let freshly_cloned = !llvm_dir.join(".git").exists();
-    clone_morello_llvm(&llvm_dir, &config.morello_llvm)?;
-
-    // Apply the patch shipped in the rust repo.
     let patch = config.rust_dir().join("llvm.patch");
     if !patch.exists() {
-        bail!("{} not found. Run `crability fetch` first", patch.display());
+        bail!(
+            "LLVM patch {} not found. Run {} first",
+            patch.display().underline(),
+            "crability fetch".bold()
+        );
     }
 
+    let llvm_dir = paths.morello_llvm_dir();
+    let freshly_cloned = !llvm_dir.join(".git").exists();
+    clone_morello_llvm(&llvm_dir, &config.morello_llvm, ctx)?;
+
+    // Apply the patch shipped in the rust repo.
     let mut applied = false;
     let patch_str = patch.to_str().context("non-UTF-8 path")?;
     if !freshly_cloned {
@@ -35,17 +42,19 @@ pub(crate) fn run() -> Result<()> {
     }
 
     if !applied {
-        Command::new("git")
-            .current_dir(llvm_dir)
-            .args(["apply", patch_str])
-            .status()?;
+        ctx.run(
+            Command::new("git")
+                .current_dir(llvm_dir)
+                .args(["apply", patch_str]),
+        )?;
     }
 
     // Build via cheribuild
-    Command::new("python3")
-        .current_dir(config.cheribuild_dir())
-        .args(["cheribuild.py", "--skip-update", "morello-llvm"])
-        .status()?;
+    ctx.run(
+        Command::new("python3")
+            .current_dir(config.cheribuild_dir())
+            .args(["cheribuild.py", "--skip-update", "morello-llvm"]),
+    )?;
 
     let llvm_config = paths.morello_sdk_bin().join("llvm-config");
     if !llvm_config.exists() {
@@ -61,9 +70,13 @@ pub(crate) fn run() -> Result<()> {
 
 /// Morello LLVM lives in cheribuild's source root rather than in `repos_dir`, and it is big
 /// enough that we only ever clone it once, at the pinned commit.
-fn clone_morello_llvm(local: &Path, config: &RepoConfig) -> Result<()> {
+fn clone_morello_llvm(local: &Path, config: &RepoConfig, ctx: &mut Context) -> Result<()> {
     if local.join(".git").exists() {
-        println!("{} already cloned, skipping", local.display());
+        let local = local.display();
+        status!(
+            "Morello LLVM {} already cloned, skipping",
+            local.underline()
+        );
         return Ok(());
     }
     if let Some(parent) = local.parent() {
@@ -71,17 +84,13 @@ fn clone_morello_llvm(local: &Path, config: &RepoConfig) -> Result<()> {
     }
     let local_str = local.to_str().context("non-UTF-8 path")?;
 
-    Command::new("git")
-        .args([
-            "clone",
-            "--revision",
-            &config.commit,
-            "--depth",
-            "1",
-            &config.remote,
-            local_str,
-        ])
-        .status()?;
-
-    Ok(())
+    ctx.run(Command::new("git").args([
+        "clone",
+        "--revision",
+        &config.commit,
+        "--depth",
+        "1",
+        &config.remote,
+        local_str,
+    ]))
 }

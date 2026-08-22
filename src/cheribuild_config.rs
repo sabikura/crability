@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
+use owo_colors::OwoColorize;
 use serde_json::Value;
 use std::{fs, path::PathBuf};
+
+use crate::status;
 
 pub struct CheribuildPaths {
     pub source_root: PathBuf,
@@ -34,16 +37,18 @@ impl CheribuildPaths {
             if let Some(o) = json.get("output-root").and_then(Value::as_str) {
                 output_root = Some(PathBuf::from(shellexpand::tilde(o).as_ref()));
             }
-            println!(
-                "reading cheribuild config: {} (source-root: {})",
-                path.display(),
-                source_root.display()
+            status!(
+                "Reading {} config: {} (source-root: {})",
+                "cheribuild".cyan(),
+                path.display().underline(),
+                source_root.display().underline()
             );
         } else {
-            println!(
-                "no {} found, using cheribuild defaults (source-root: {})",
-                path.display(),
-                source_root.display()
+            status!(
+                "{} not found, using {} defaults (source-root: {})",
+                path.display().underline(),
+                "cheribuild".cyan(),
+                source_root.display().underline()
             );
         }
 

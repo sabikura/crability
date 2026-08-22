@@ -1,6 +1,7 @@
-use anyhow::anyhow;
-use anyhow::{Context, Result};
-use indicatif::ProgressBar;
+use crate::context::Context;
+use crate::status;
+use anyhow::{anyhow, bail};
+use anyhow::{Context as _, Result};
 use nix::unistd::Uid;
 use owo_colors::OwoColorize;
 use std::process::Command;
@@ -11,15 +12,15 @@ const _PRE_BUILD_SETUP_URL: &str = "https://github.com/CTSRD-CHERI/cheribuild#pr
 
 /// Supported platforms for the setup step
 /// TODO: Also support macOS
-#[derive(Debug)]
+#[derive(Debug, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 enum Platform {
     Debian,
     Fedora,
     Arch,
 }
 
-pub(crate) fn run() -> Result<()> {
-    let bar = ProgressBar::new_spinner();
+pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let platform = match std::env::consts::OS {
         "linux" => {
             let os_release = rs_release::parse_os_release("/etc/os-release")?;
@@ -45,28 +46,52 @@ pub(crate) fn run() -> Result<()> {
         )),
     }?;
 
-    // NOTE: This bar is not looking that pretty...maybe just replace with a println
-    bar.set_message(format!(
-        "Installing {} prerequisites for the current platform: {:?}",
-        "cheribuild".bold().cyan(),
-        platform
-    ));
+    status!(
+        "Installing {} prerequisites for the current platform: {}",
+        "cheribuild".bold().purple(),
+        platform.blue().underline()
+    );
 
-    match platform {
-        Platform::Debian => install_debian(),
-        Platform::Fedora => install_fedora(),
-        Platform::Arch => install_arch(),
-    }?;
+    refresh_sudo_credentials()?;
 
-    bar.finish_with_message(format!(
-        "Installed prerequisites for {}",
-        "cheribuild".bold().cyan()
-    ));
+    let mut command = match platform {
+        Platform::Debian => install_debian_command(),
+        Platform::Fedora => install_fedora_command(),
+        Platform::Arch => install_arch_command(),
+    };
 
-    Ok(())
+    ctx.run(&mut command)
 }
 
-fn run_privileged(program: &str, args: &[&str]) -> Result<()> {
+/// Prompt for the sudo password up front, while we still have the terminal to ourselves.
+///
+/// The install step itself runs under [`Context::run`], which redraws a spinner over stderr ten
+/// times a second. sudo's prompt goes to the tty and gets painted over immediately.
+fn refresh_sudo_credentials() -> Result<()> {
+    // TODO: Maybe move this into `context` to run a command without progress bar?
+    if Uid::effective().is_root() {
+        return Ok(());
+    }
+
+    let mut command = Command::new("sudo");
+    command.arg("--validate");
+    let status = command.status()?;
+
+    if !status.success() {
+        let command_str = "sudo --validate".bold();
+        let msg = match status.code() {
+            Some(code) => format!("{command_str} exited with {}", code.red().bold()),
+            None => format!("{command_str} terminated by signal"),
+        };
+        status!("{msg}");
+
+        bail!("{command_str} failed with {status}")
+    } else {
+        Ok(())
+    }
+}
+
+fn privileged_command(program: &str, args: &[&str]) -> Command {
     let mut argv = Vec::with_capacity(args.len() + 2);
     if !Uid::effective().is_root() {
         // TODO: Maybe check for doas also?
@@ -75,21 +100,13 @@ fn run_privileged(program: &str, args: &[&str]) -> Result<()> {
     argv.push(program);
     argv.extend_from_slice(args);
 
-    // TODO: Add a `run` helper that prints the command ran
-    let status = Command::new(argv[0])
-        .args(&argv[1..])
-        .status()
-        .with_context(|| format!("Failed to run {}", argv.join(" ")))?;
-
-    match status.code() {
-        Some(0) => Ok(()),
-        Some(code) => Err(anyhow!("{} exited with status {}", program, code)),
-        None => Err(anyhow!("{} was terminated by a signal", program)),
-    }
+    let mut command = Command::new(argv[0]);
+    command.args(&argv[1..]);
+    command
 }
 
-fn install_debian() -> Result<()> {
-    run_privileged(
+fn install_debian_command() -> Command {
+    privileged_command(
         "apt",
         &[
             "install",
@@ -122,8 +139,8 @@ fn install_debian() -> Result<()> {
     )
 }
 
-fn install_fedora() -> Result<()> {
-    run_privileged(
+fn install_fedora_command() -> Command {
+    privileged_command(
         "dnf",
         &[
             "install",
@@ -150,11 +167,16 @@ fn install_fedora() -> Result<()> {
     )
 }
 
-fn install_arch() -> Result<()> {
-    run_privileged(
+fn install_arch_command() -> Command {
+    privileged_command(
         "pacman",
         &[
             "-Syu",
+            // The counterpart to apt/dnf's `-y`: without it pacman asks `[Y/n]` on stdout, which
+            // `Context::run` sends to the log file where nobody can see it.
+            "--noconfirm",
+            // Don't reinstall what's already there, so re-running `setup` is cheap.
+            "--needed",
             "autoconf",
             "automake",
             "libtool",

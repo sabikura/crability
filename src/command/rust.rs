@@ -1,37 +1,44 @@
 use crate::{
     cheribuild_config::CheribuildPaths,
     config::{self, Config},
+    context::Context,
+    status,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context as _, Result};
+use owo_colors::OwoColorize;
 use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
 
-pub(crate) fn run() -> Result<()> {
+pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let config = Config::read_from_file(&config::path()?)?;
     let rust_dir = config.rust_dir();
 
     if !rust_dir.join("x.py").exists() {
         bail! {
-            "{} doesn't look like a rust checkout. Run `crability fetch` first",
-            rust_dir.display()
+            "{} does not look like a rust checkout. Run {} first",
+            rust_dir.display(),
+            "crability fetch".bold()
         }
     }
 
     // Write the config.toml
     let paths = CheribuildPaths::read()?;
     let config_toml = rust_dir.join("config.toml");
+    status!("Writing {}", config_toml.display().underline());
     fs::write(&config_toml, generate_config_toml(&config, &paths))
         .with_context(|| format!("writing {}", config_toml.display()))?;
 
     // Write the cheri-config.sh script
     let cheri_home = paths.source_root.to_str().context("non-UTF-8 path")?;
     let cheri_config = config.rust_dir().join("cheri-config.sh");
+    status!("Writing {}", cheri_config.display().underline());
     fs::write(&cheri_config, generate_cheri_config(cheri_home))
         .with_context(|| format!("writing {}", cheri_config.display()))?;
 
-    Command::new("python3")
-        .current_dir(&rust_dir)
-        .args(["x.py", "build"])
-        .status()?;
+    ctx.run(
+        Command::new("python3")
+            .current_dir(&rust_dir)
+            .args(["x.py", "build"]),
+    )?;
 
     // Install the binaries in ~/.crability/bin
     install_binaries(&config, &rust_dir)?;
@@ -50,6 +57,10 @@ pub fn install_binaries(config: &Config, rust_dir: &Path) -> Result<()> {
         .join("bin");
 
     let bin_dir = config.bin_dir();
+    status!(
+        "Installing the binaries inside {}",
+        bin_dir.display().underline()
+    );
     fs::create_dir_all(&bin_dir).with_context(|| format!("creating {}", bin_dir.display()))?;
 
     let stage1_bins = fs::read_dir(&stage1_bin_dir)
