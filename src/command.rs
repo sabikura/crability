@@ -60,6 +60,24 @@ impl Command {
     }
 }
 
+/// Link every file in `src_dir` into `bin_dir`
+pub(crate) fn install_bins_from(src_dir: &Path, bin_dir: &Path) -> Result<()> {
+    fs::create_dir_all(bin_dir).with_context(|| format!("creating {}", bin_dir.display()))?;
+
+    let entries =
+        fs::read_dir(src_dir).with_context(|| format!("reading {}", src_dir.display()))?;
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_dir() {
+            continue;
+        }
+
+        install_bin(&path, bin_dir)?;
+    }
+
+    Ok(())
+}
+
 /// Create a link to `path` inside `bin_dir`
 pub(crate) fn install_bin(path: &Path, bin_dir: &Path) -> Result<()> {
     let Some(name) = path.file_name() else {

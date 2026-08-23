@@ -1,6 +1,6 @@
 use crate::{
     cheribuild_config::CheribuildPaths,
-    command::install_bin,
+    command::{install_bin, install_bins_from},
     config::{self, Config},
     context::Context,
     status,
@@ -62,19 +62,7 @@ pub fn install_binaries(config: &Config, rust_dir: &Path) -> Result<()> {
         "Installing the binaries inside {}",
         bin_dir.display().underline()
     );
-    fs::create_dir_all(&bin_dir).with_context(|| format!("creating {}", bin_dir.display()))?;
-
-    let stage1_bins = fs::read_dir(&stage1_bin_dir)
-        .with_context(|| format!("reading {}", stage1_bin_dir.display()))?;
-
-    for bin in stage1_bins.filter_map(Result::ok) {
-        let path = bin.path();
-        if path.is_dir() {
-            continue;
-        }
-
-        install_bin(&path, &bin_dir)?;
-    }
+    install_bins_from(&stage1_bin_dir, &bin_dir)?;
 
     // Newer host cargos pass flags like --check-cfg that the pinned rustc rejects, so a matching
     // cargo has to ship with the toolchain. x.py only puts one in stage1 when tools/cargo is

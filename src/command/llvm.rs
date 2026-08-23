@@ -1,5 +1,6 @@
 use crate::{
     cheribuild_config::CheribuildPaths,
+    command::install_bins_from,
     config::{self, Config, RepoConfig},
     context::Context,
     status,
@@ -64,6 +65,14 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
             llvm_config.display()
         );
     }
+
+    // Install the Morello SDK binaries in ~/.crability/bin
+    let bin_dir = config.bin_dir();
+    status!(
+        "Installing the Morello SDK binaries inside {}",
+        bin_dir.display().underline()
+    );
+    install_bins_from(&paths.morello_sdk_bin(), &bin_dir)?;
 
     Ok(())
 }
