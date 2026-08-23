@@ -17,11 +17,11 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    pub(crate) fn new(command: Command) -> Result<Self> {
+    pub(crate) fn new(command: &Command) -> Result<Self> {
         Context::create_dir(command).map(|dir| Self { dir })
     }
 
-    fn create_dir(command: Command) -> Result<PathBuf> {
+    fn create_dir(command: &Command) -> Result<PathBuf> {
         let home_dir = dirs::home_dir().context("Home directory could not be found")?;
         let root = home_dir.join(".local").join("state").join("crability");
         fs::create_dir_all(&root)?;

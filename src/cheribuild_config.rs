@@ -19,6 +19,15 @@ impl CheribuildPaths {
         self.output_root.join("morello-sdk").join("bin")
     }
 
+    pub fn morello_fvp_dir(&self) -> PathBuf {
+        self.output_root.join("morello-sdk").join("FVP_Morello")
+    }
+
+    /// The riscv/aarch64 CHERI SDK, where cheribuild installs CHERI QEMU
+    pub fn sdk_bin(&self) -> PathBuf {
+        self.output_root.join("sdk").join("bin")
+    }
+
     pub fn read() -> Result<Self> {
         let home_dir = dirs::home_dir().context("Home directory could not be found")?;
         let path = home_dir.join(".config").join("cheribuild.json");

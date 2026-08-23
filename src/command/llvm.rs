@@ -10,7 +10,7 @@ use std::{fs, path::Path, process::Command};
 
 pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let paths = CheribuildPaths::read()?;
-    let config = Config::read_from_file(&config::path()?)
+    let config = Config::load_and_print(&config::path()?)
         .context("Could not read from config file. Please run `crability init`")?;
 
     fs::create_dir_all(&paths.source_root)

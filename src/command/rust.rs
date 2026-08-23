@@ -1,15 +1,16 @@
 use crate::{
     cheribuild_config::CheribuildPaths,
+    command::install_bin,
     config::{self, Config},
     context::Context,
     status,
 };
 use anyhow::{bail, Context as _, Result};
 use owo_colors::OwoColorize;
-use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
+use std::{fs, path::Path, process::Command};
 
 pub(crate) fn run(ctx: &mut Context) -> Result<()> {
-    let config = Config::read_from_file(&config::path()?)?;
+    let config = Config::load_and_print(&config::path()?)?;
     let rust_dir = config.rust_dir();
 
     if !rust_dir.join("x.py").exists() {
@@ -72,20 +73,20 @@ pub fn install_binaries(config: &Config, rust_dir: &Path) -> Result<()> {
             continue;
         }
 
-        let Some(name) = path.file_name() else {
-            continue;
-        };
+        install_bin(&path, &bin_dir)?;
+    }
 
-        let dest = bin_dir.join(name);
-
-        // This doesnt follow the symlink. Just check the file is fine before trying to delete it
-        // TODO: Log files with issues
-        if fs::symlink_metadata(&dest).is_ok() {
-            fs::remove_file(&dest).with_context(|| format!("replacing {}", dest.display()))?;
-        }
-
-        symlink(&path, &dest)
-            .with_context(|| format!("linking {} -> {}", dest.display(), path.display()))?;
+    // Newer host cargos pass flags like --check-cfg that the pinned rustc rejects, so a matching
+    // cargo has to ship with the toolchain. x.py only puts one in stage1 when tools/cargo is
+    // built; otherwise fall back to the stage0 cargo, like the fork's own wrapper scripts do.
+    let stage0_cargo = rust_dir
+        .join("build")
+        .join(HOST_TARGET)
+        .join("stage0")
+        .join("bin")
+        .join("cargo");
+    if fs::symlink_metadata(bin_dir.join("cargo")).is_err() && stage0_cargo.exists() {
+        install_bin(&stage0_cargo, &bin_dir)?;
     }
 
     Ok(())

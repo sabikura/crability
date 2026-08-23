@@ -35,8 +35,6 @@ pub struct RepoConfig {
 pub struct Repos {
     pub cheribuild: RepoConfig,
     pub rust: RepoConfig,
-    #[serde(rename = "compiler-builtins")]
-    pub compiler_builtins: RepoConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,11 +60,7 @@ impl Default for Config {
                 },
                 rust: RepoConfig {
                     remote: "https://github.com/irina-nita/rust.git".into(),
-                    commit: "269b2426c66ef00137a18b6ef8cb8b1ce4d25e37".into(),
-                },
-                compiler_builtins: RepoConfig {
-                    remote: "https://github.com/irina-nita/compiler-builtins.git".into(),
-                    commit: "7b4f79f0aee077af1ce1026dbccc65b1ba4579c1".into(),
+                    commit: "fff2dc417b563da01ef48924940d94962b268d65".into(),
                 },
             },
             morello_llvm: RepoConfig {
@@ -80,29 +74,29 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn read_from_file(path: &Path) -> Result<Self> {
+    pub fn load_and_print(path: &Path) -> Result<Self> {
         status!(
             "Reading {} configuration from {}",
             "crability".bold().purple(),
             path.display().underline()
         );
-        let raw = fs::read_to_string(path)
-            .with_context(|| format!("reading config {}", path.display()))?;
-        let config: Config = serde_json::from_str(&raw)
-            .with_context(|| format!("parsing config {}", path.display()))?;
+        let config = Self::load(path)?;
         config.print();
 
         Ok(config)
     }
 
-    /// Print the configuration as an aligned `name  value` table, so the pinned commits and the
-    /// resolved (tilde-expanded) directories are on screen before anything is cloned or built.
+    pub fn load(path: &Path) -> Result<Self> {
+        let raw = fs::read_to_string(path)
+            .with_context(|| format!("reading config {}", path.display()))?;
+        serde_json::from_str(&raw).with_context(|| format!("parsing config {}", path.display()))
+    }
+
     fn print(&self) {
         let dirs = [("repos-dir", self.repos_dir()), ("bin-dir", self.bin_dir())];
         let repos = [
             ("cheribuild", &self.repos.cheribuild),
             ("rust", &self.repos.rust),
-            ("compiler-builtins", &self.repos.compiler_builtins),
             ("morello-llvm", &self.morello_llvm),
         ];
 
@@ -143,10 +137,6 @@ impl Config {
 
     pub fn rust_dir(&self) -> PathBuf {
         self.repos_dir().join("rust")
-    }
-
-    pub fn compiler_builtins_dir(&self) -> PathBuf {
-        self.repos_dir().join("compiler-builtins")
     }
 }
 

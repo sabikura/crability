@@ -7,7 +7,7 @@ use owo_colors::OwoColorize;
 use std::{fs, path::Path, process::Command};
 
 pub(crate) fn run(ctx: &mut Context) -> Result<()> {
-    let config = Config::read_from_file(&config::path()?)
+    let config = Config::load_and_print(&config::path()?)
         .context("Could not read from config file. Please run `crability init`")?;
 
     let repos_dir = config.repos_dir();
@@ -16,10 +16,6 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let targets = [
         (config.cheribuild_dir(), &config.repos.cheribuild),
         (config.rust_dir(), &config.repos.rust),
-        (
-            config.compiler_builtins_dir(),
-            &config.repos.compiler_builtins,
-        ),
     ];
 
     for (local, config) in targets {
