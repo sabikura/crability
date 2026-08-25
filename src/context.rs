@@ -1,5 +1,5 @@
 use crate::command::Command;
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use indicatif::{ProgressBar, ProgressStyle};
 use jiff::Zoned;
 use owo_colors::OwoColorize;
@@ -43,7 +43,7 @@ impl Context {
                 val => {
                     return val
                         .with_context(|| format!("creating {}", path.display()))
-                        .map(|()| path)
+                        .map(|()| path);
                 }
             }
         }

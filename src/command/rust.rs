@@ -5,7 +5,7 @@ use crate::{
     context::Context,
     status,
 };
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use owo_colors::OwoColorize;
 use std::{fs, path::Path, process::Command};
 

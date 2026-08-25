@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::status;
-use anyhow::{anyhow, bail};
 use anyhow::{Context as _, Result};
+use anyhow::{anyhow, bail};
 use nix::unistd::Uid;
 use owo_colors::OwoColorize;
 use std::process::Command;
