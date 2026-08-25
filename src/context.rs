@@ -64,7 +64,7 @@ impl Context {
     pub(crate) fn run(&mut self, command: &mut std::process::Command) -> Result<()> {
         let bar = self.bar();
 
-        let command_str = command_to_str(&command);
+        let command_str = command_to_str(command);
 
         let mut filename = command_str.replace(" ", "-");
         filename.retain(|c| !c.is_whitespace() && c != '/' && c != '\\');

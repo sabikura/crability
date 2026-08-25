@@ -19,7 +19,7 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     ];
 
     for (local, config) in targets {
-        clone_or_update(&local, &config, ctx)?;
+        clone_or_update(&local, config, ctx)?;
     }
 
     eprintln!(
