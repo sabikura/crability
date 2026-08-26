@@ -10,6 +10,7 @@ pub(crate) mod fetch;
 pub(crate) mod fvp_install;
 pub(crate) mod init;
 pub(crate) mod llvm;
+pub(crate) mod new_project;
 pub(crate) mod qemu_install;
 pub(crate) mod rust;
 pub(crate) mod setup;
@@ -43,6 +44,8 @@ pub(crate) enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<OsString>,
     },
+    /// Create a new project using cargo-generate templates for Morello QEMU/FVP
+    NewProject,
 }
 
 impl Command {
@@ -56,6 +59,7 @@ impl Command {
             Command::FvpInstall => fvp_install::run(),
             Command::QemuInstall => qemu_install::run(),
             Command::Cargo { args } => cargo::run(args),
+            Command::NewProject => new_project::run(),
         }
     }
 }
