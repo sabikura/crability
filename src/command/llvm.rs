@@ -7,7 +7,11 @@ use crate::{
 };
 use anyhow::{Context as _, Result, bail};
 use owo_colors::OwoColorize;
-use std::{fs, path::Path, process::Command};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     let paths = CheribuildPaths::read()?;
@@ -50,12 +54,26 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
         )?;
     }
 
-    // Build via cheribuild
+    // Build via cheribuild. Left to its own devices cheribuild picks the
+    // newest system clang for host binaries, which has crashed sporadically
+    // building Morello LLVM; pin the build to GCC, the known-good host
+    // compiler.
+    let (cc, cxx, cpp) = find_host_gcc()?;
+    status!(
+        "Building with the {} host compiler",
+        cc.display().underline()
+    );
     ctx.run(
         Command::new("python3")
             .current_dir(config.cheribuild_dir())
-            .args(["cheribuild.py", "--skip-update", "morello-llvm"]),
-    )?;
+            .args(["cheribuild.py", "--skip-update", "morello-llvm"])
+            .arg(format!("--clang-path={}", cc.display()))
+            .arg(format!("--clang++-path={}", cxx.display()))
+            .arg(format!("--clang-cpp-path={}", cpp.display())),
+    )
+    .with_context(|| {
+        format!("Failed to re-build LLVM. Please try to build with an older version of GCC.")
+    })?;
 
     let llvm_config = paths.morello_sdk_bin().join("llvm-config");
     if !llvm_config.exists() {
@@ -75,6 +93,37 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     install_bins_from(&paths.morello_sdk_bin(), &bin_dir)?;
 
     Ok(())
+}
+
+/// Find the GCC to hand to cheribuild, preferring the versions known to build
+/// Morello LLVM. All three of gcc/g++/cpp must come from the same version, so
+/// the suffixes are tried as a set (`gcc-14`/`g++-14`/`cpp-14` on
+/// Debian/Ubuntu, `gcc-13`/... from Arch's gcc13, plain `gcc`/... elsewhere).
+fn find_host_gcc() -> Result<(PathBuf, PathBuf, PathBuf)> {
+    const SUFFIXES: &[&str] = &["-14", "-13", ""];
+
+    for suffix in SUFFIXES {
+        let found = (
+            find_in_path(&format!("gcc{suffix}")),
+            find_in_path(&format!("g++{suffix}")),
+            find_in_path(&format!("cpp{suffix}")),
+        );
+        if let (Some(cc), Some(cxx), Some(cpp)) = found {
+            return Ok((cc, cxx, cpp));
+        }
+    }
+
+    bail!(
+        "No GCC found on PATH. Run {} to install the prerequisites",
+        "crability setup".bold()
+    )
+}
+
+fn find_in_path(name: &str) -> Option<PathBuf> {
+    let path = env::var_os("PATH")?;
+    env::split_paths(&path)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Morello LLVM lives in cheribuild's source root rather than in `repos_dir`, and it is big

@@ -135,6 +135,9 @@ fn install_debian_command() -> Command {
             "libgmp-dev",
             "bc",
             "tzdata",
+            // Host compiler for the cheribuild steps (see `find_host_gcc`)
+            "gcc-14",
+            "g++-14",
         ],
     )
 }
@@ -163,6 +166,13 @@ fn install_fedora_command() -> Command {
             "libcap-ng-devel",
             "expat-devel",
             "time",
+            // Host compiler for the cheribuild steps (see `find_host_gcc`):
+            // gcc14/gcc14-c++ provide gcc-14/g++-14/cpp-14, plus the default
+            // GCC for everything else that needs a plain `cc`
+            "gcc",
+            "gcc-c++",
+            "gcc14",
+            "gcc14-c++",
         ],
     )
 }

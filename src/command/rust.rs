@@ -47,10 +47,10 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
     Ok(())
 }
 
-pub fn install_binaries(config: &Config, rust_dir: &Path) -> Result<()> {
-    // FIXME: This is the only host target supported for now :(
-    const HOST_TARGET: &str = "x86_64-unknown-linux-gnu";
+// FIXME: This is the only host target supported for now :(
+const HOST_TARGET: &str = "x86_64-unknown-linux-gnu";
 
+pub fn install_binaries(config: &Config, rust_dir: &Path) -> Result<()> {
     let stage1_bin_dir = rust_dir
         .join("build")
         .join(HOST_TARGET)

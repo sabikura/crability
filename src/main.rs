@@ -20,5 +20,6 @@ fn main() {
     if let Err(err) = cli.command.run() {
         status!("{}", "Encountered an error :(".red());
         status!("{err}");
+        std::process::exit(1);
     }
 }

@@ -68,6 +68,11 @@ impl Context {
 
         let mut filename = command_str.replace(" ", "-");
         filename.retain(|c| !c.is_whitespace() && c != '/' && c != '\\');
+        // Truncate the filename
+        const MAX_CHARS: usize = 128;
+        if let Some((end, _)) = filename.char_indices().nth(MAX_CHARS) {
+            filename.truncate(end);
+        }
         let path = self.dir.join(format!("{filename}.log"));
 
         let mut logfile =
