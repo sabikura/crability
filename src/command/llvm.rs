@@ -71,9 +71,7 @@ pub(crate) fn run(ctx: &mut Context) -> Result<()> {
             .arg(format!("--clang++-path={}", cxx.display()))
             .arg(format!("--clang-cpp-path={}", cpp.display())),
     )
-    .with_context(|| {
-        format!("Failed to re-build LLVM. Please try to build with an older version of GCC.")
-    })?;
+    .context("Failed to re-build LLVM. Please try to build with an older version of GCC.")?;
 
     let llvm_config = paths.morello_sdk_bin().join("llvm-config");
     if !llvm_config.exists() {
